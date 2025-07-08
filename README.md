@@ -261,18 +261,13 @@ This library prioritizes security in several ways:
 2. **Proper Error Handling**: Validates inputs and handles errors thoroughly
 3. **Memory Safety**: Uses Rust's safety guarantees and careful FFI design
 4. **No Unnecessary Dependencies**: Minimizes the dependency tree
-5. **Based on Production Code**: Builds on Matt Corallo's well-reviewed crates
 
 ## License
 
-This project is licensed under either of
+This library is licensed under:
 
- * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
-   http://www.apache.org/licenses/LICENSE-2.0)
  * MIT license ([LICENSE-MIT](LICENSE-MIT) or
    http://opensource.org/licenses/MIT)
-
-at your option.
 
 ## Acknowledgments
 
