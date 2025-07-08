@@ -1,6 +1,46 @@
 [package]
 name = "bip353-rs"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "Integration layer for BIP-353 DNS Payment Instructions"
+authors = ["Frankline Omondi <frankomosh197@gmail.com>"]
+repository = "https://github.com/bitcoin-integration/bip353-rs"
+license = "MIT"
+readme = "README.md"
+keywords = ["bitcoin", "dns", "bip353", "payment", "lightning"]
+categories = ["cryptography", "api-bindings"]
 
 [dependencies]
+bitcoin-payment-instructions = "0.4.0"
+dnssec-prover = "0.6.7"
+bitcoin = "0.32"
+thiserror = "1.0"
+tokio = { version = "1.30", features = ["rt-multi-thread", "macros"] }
+async-trait = "0.1.73"
+log = "0.4"
+url = "2.4"
+
+[features]
+default = ["std"]
+std = ["bitcoin-payment-instructions/std"]
+http = ["bitcoin-payment-instructions/http"]
+ffi = ["std", "once_cell"]
+python = ["std", "pyo3"]
+
+[dependencies.once_cell]
+version = "1.18"
+optional = true
+
+[dependencies.pyo3]
+version = "0.19"
+features = ["extension-module"]
+optional = true
+
+[dev-dependencies]
+tokio-test = "0.4"
+pretty_assertions = "1.4"
+tempfile = "3.8"
+
+[lib]
+name = "bip353"
+crate-type = ["cdylib", "rlib"]
