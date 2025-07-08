@@ -1,8 +1,8 @@
 # bip353-rs
 
-[![crates.io](https://img.shields.io/crates/v/bip353-integrations.svg)](https://crates.io/crates/bip353-integrations)
+[![crates.io](https://img.shields.io/crates/v/bip353-rs.svg)](https://crates.io/crates/bip353-rs)
 [![Documentation](https://docs.rs/bip353-integrations/badge.svg)](https://docs.rs/bip353-integrations)
-[![MIT/Apache-2.0 licensed](https://img.shields.io/crates/l/bip353-integrations.svg)](./LICENSE)
+[![MIT/Apache-2.0 licensed](https://img.shields.io/crates/l/bip353-rs.svg)](./LICENSE)
 
 **BIP-353 Integrations** is a high-level integration layer for BIP-353 (DNS Payment Instructions) that provides convenient interfaces for Bitcoin Core and HWI integration. This library wraps the underlying [`bitcoin-payment-instructions`](https://crates.io/crates/bitcoin-payment-instructions) and [`dnssec-prover`](https://crates.io/crates/dnssec-prover) crates by Matt Corallo, providing a simplified API, FFI bindings, and Python bindings.
 
