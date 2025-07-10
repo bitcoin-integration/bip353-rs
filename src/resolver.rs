@@ -13,7 +13,13 @@ use crate::{
     config::ResolverConfig,
     types::PaymentInfo,
     parse_address,
+    metrics::Bip353Metrics,
 };
+
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use std::time::{SystemTime, Duration};
 
 /// Type of resolver to use
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,13 +32,82 @@ pub enum ResolverType {
     HTTP,
 }
 
-/// BIP-353 resolver
+/// Enhanced payment info with safety warnings
+#[derive(Debug, Clone)]
+pub struct SafePaymentInfo {
+    pub payment_info: PaymentInfo,
+    pub warnings: Vec<AddressWarning>,
+    pub last_checked: SystemTime,
+}
+
+/// Address usage warning
+#[derive(Debug, Clone)]
+pub enum AddressWarning {
+    /// Address was used in a previous transaction
+    AddressReused { tx_id: String },
+    /// DNS record is stale
+    StaleRecord { age: Duration },
+    /// DNSSEC validation issues
+    DnssecWarning { message: String },
+}
+
+/// Simple address cache with TTL
+#[derive(Debug)]
+struct AddressCache {
+    entries: Arc<RwLock<HashMap<String, CacheEntry>>>,
+    default_ttl: Duration,
+}
+
+#[derive(Debug, Clone)]
+struct CacheEntry {
+    payment_info: PaymentInfo,
+    cached_at: SystemTime,
+    ttl: Duration,
+}
+
+impl AddressCache {
+    fn new(default_ttl: Duration) -> Self {
+        Self {
+            entries: Arc::new(RwLock::new(HashMap::new())),
+            default_ttl,
+        }
+    }
+    
+    async fn get(&self, hrn: &str) -> Option<PaymentInfo> {
+        let entries = self.entries.read().await;
+        if let Some(entry) = entries.get(hrn) {
+            if entry.cached_at.elapsed().unwrap_or(Duration::MAX) < entry.ttl {
+                return Some(entry.payment_info.clone());
+            }
+        }
+        None
+    }
+    
+    async fn insert(&self, hrn: String, payment_info: PaymentInfo) {
+        let mut entries = self.entries.write().await;
+        entries.insert(hrn, CacheEntry {
+            payment_info,
+            cached_at: SystemTime::now(),
+            ttl: self.default_ttl,
+        });
+    }
+    
+    async fn invalidate(&self, hrn: &str) {
+        let mut entries = self.entries.write().await;
+        entries.remove(hrn);
+    }
+}
+
+/// BIP-353 resolver - (what's actually needed)
 pub struct Bip353Resolver {
     dns_resolver: DNSHrnResolver,
     #[cfg(feature = "http")]
     http_resolver: HTTPHrnResolver,
     resolver_type: ResolverType,
     config: ResolverConfig,
+    cache: Option<Arc<AddressCache>>,
+    metrics: Option<Arc<Bip353Metrics>>,
+    // Removed: chain_monitor here (not used yet but will be considered in later versions)
 }
 
 impl Bip353Resolver {
@@ -49,6 +124,8 @@ impl Bip353Resolver {
             http_resolver: HTTPHrnResolver,
             resolver_type: ResolverType::DNS,
             config,
+            cache: None,        
+            metrics: None,      
         })
     }
     
@@ -62,6 +139,38 @@ impl Bip353Resolver {
             http_resolver: HTTPHrnResolver,
             resolver_type,
             config,
+            cache: None,        
+            metrics: None,      
+        })
+    }
+    
+    /// Create a new resolver with enhanced features (only cache and metrics)
+    pub fn with_enhanced_config(
+        config: ResolverConfig,
+        enable_cache: bool,
+        cache_ttl: Duration,
+        enable_metrics: bool,
+    ) -> Result<Self, Bip353Error> {
+        let cache = if enable_cache {
+            Some(Arc::new(AddressCache::new(cache_ttl)))
+        } else {
+            None
+        };
+        
+        let metrics = if enable_metrics {
+            Some(Arc::new(Bip353Metrics::new()))
+        } else {
+            None
+        };
+        
+        Ok(Self { 
+            dns_resolver: DNSHrnResolver(config.dns_resolver),
+            #[cfg(feature = "http")]
+            http_resolver: HTTPHrnResolver,
+            resolver_type: ResolverType::DNS,
+            config,
+            cache,
+            metrics,
         })
     }
     
@@ -156,25 +265,97 @@ impl Bip353Resolver {
         let (user, domain) = parse_address(address)?;
         self.resolve(&user, &domain).await
     }
+    
+    /// Resolve with basic safety checks (cache + warnings)
+    pub async fn resolve_with_safety_checks(&self, user: &str, domain: &str) -> Result<SafePaymentInfo, Bip353Error> {
+        let hrn = format!("{}@{}", user, domain);
+        
+        // Check cache first
+        if let Some(cache) = &self.cache {
+            if let Some(cached) = cache.get(&hrn).await {
+                // Record cache hit
+                if let Some(metrics) = &self.metrics {
+                    metrics.record_cache_hit();
+                }
+                
+                return Ok(SafePaymentInfo {
+                    payment_info: cached,
+                    warnings: vec![], // No warnings for cached results for now
+                    last_checked: SystemTime::now(),
+                });
+            } else if let Some(metrics) = &self.metrics {
+                metrics.record_cache_miss();
+            }
+        }
+        
+        // Resolve using main impl
+        let start_time = std::time::Instant::now();
+        let payment_info = self.resolve(user, domain).await?;
+        let resolution_time = start_time.elapsed();
+        
+        // Cache the result
+        if let Some(cache) = &self.cache {
+            cache.insert(hrn.clone(), payment_info.clone()).await;
+        }
+        
+        // Record metrics
+        if let Some(metrics) = &self.metrics {
+            metrics.record_resolution_success(domain, resolution_time).await;
+        }
+        
+        // Basic warnings (can be extended later)
+        let warnings = self.check_basic_warnings(&payment_info).await;
+        
+        Ok(SafePaymentInfo {
+            payment_info,
+            warnings,
+            last_checked: SystemTime::now(),
+        })
+    }
+    
+    /// Basic warning checks that don't require blockchain integration
+    async fn check_basic_warnings(&self, _payment_info: &PaymentInfo) -> Vec<AddressWarning> {
+        let warnings = vec![];
+        
+        // Future: Adding basic checks like:
+        // - URI format validation
+        // - Parameter validation
+        // - Network compatibility checks
+        
+        warnings
+    }
+    
+    /// Clear cache
+    pub async fn clear_cache(&self) {
+        if let Some(cache) = &self.cache {
+            let mut entries = cache.entries.write().await;
+            entries.clear();
+        }
+    }
+    
+    /// Invalidate specific cache entry
+    pub async fn invalidate_cache(&self, hrn: &str) {
+        if let Some(cache) = &self.cache {
+            cache.invalidate(hrn).await;
+        }
+    }
+    
+    /// Get metrics if enabled
+    pub fn get_metrics(&self) -> Option<crate::metrics::ResolutionStats> {
+        self.metrics.as_ref().map(|m| m.get_resolution_stats())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     
-    // These tests require actual DNS resolution, so they're ignored by default
-    // Run them using: cargo test -- --ignored
-    
     #[tokio::test]
     #[ignore]
     async fn test_resolve_address() {
-        // This test requires a valid BIP-353 DNS setup
-        // Replace with a real BIP-353 address for actual testing
         let resolver = Bip353Resolver::new().unwrap();
         let result = resolver.resolve_address("user@example.com").await;
         
-        // will likely fail with most addresses since BIP-353 is new
-        // so the important thing is that it doesn't panic
         if result.is_ok() {
             let info = result.unwrap();
             assert!(info.uri.starts_with("bitcoin:"));
@@ -182,20 +363,22 @@ mod tests {
     }
     
     #[tokio::test]
-    #[ignore]
-    async fn test_resolver_with_config() {
-        // Test with custom configuration
-        let config = ResolverConfig::default()
-            .with_dns_resolver("1.1.1.1:53".parse().unwrap())
-            .with_timeout(std::time::Duration::from_secs(10));
-            
-        let resolver = Bip353Resolver::with_config(config).unwrap();
+    async fn test_enhanced_resolver() {
+        let config = ResolverConfig::default();
+        let resolver = Bip353Resolver::with_enhanced_config(
+            config,
+            true, // enable cache
+            Duration::from_secs(300), // cache TTL
+            true, // enable metrics
+        ).unwrap();
         
-        // Try to resolve a known address
-        // This will likely fail with most addresses since BIP-353 is new
-        let result = resolver.resolve("user", "example.com").await;
+        // Test cache functionality
+        resolver.clear_cache().await;
+        resolver.invalidate_cache("test@example.com").await;
         
-        // The important thing is that it doesn't panic
-        assert!(result.is_err() || result.is_ok());
+        // Verify enhanced features are enabled
+        assert!(resolver.cache.is_some());
+        assert!(resolver.metrics.is_some());
+        assert!(resolver.get_metrics().is_some());
     }
 }

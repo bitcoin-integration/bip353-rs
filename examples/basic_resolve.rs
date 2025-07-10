@@ -1,4 +1,4 @@
-//! Basic example of resolving a BIP-353 address
+//! A basic example of resolving a BIP-353 address
 
 use bip353::{Bip353Resolver, ResolverConfig};
 use std::env;

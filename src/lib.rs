@@ -4,13 +4,15 @@
 //! bitcoin-payment-instructions and dnssec-prover crates for resolving
 //! human-readable Bitcoin addresses (₿user@domain) through DNS.
 //!
-//! It's designed to be easily integrated with Bitcoin Core (through an inbuilt FFI)
+//! It is designed to be easily integrated with Bitcoin Core (through an inbuilt FFI)
 //! and Hardware Wallet Interface (via Python bindings).
 
 mod error;
 mod resolver;
 mod types;
 mod config;
+mod metrics;     
+mod monitoring;   
 
 #[cfg(feature = "ffi")]
 pub mod ffi;
@@ -22,6 +24,8 @@ pub use error::Bip353Error;
 pub use resolver::{Bip353Resolver, ResolverType};
 pub use types::{PaymentInfo, PaymentType};
 pub use config::ResolverConfig;
+pub use metrics::{Bip353Metrics, ResolutionStats, CacheStats};
+pub use monitoring::{ChainMonitor, ChainBackend, AddressUsedEvent};
 
 /// BIP-353 Bitcoin address parsing utility
 ///

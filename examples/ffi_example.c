@@ -3,7 +3,7 @@
 #include <string.h>
 
 // Include the C header for the FFI bindings
-// In a production-grade impl, this would be generated or provided with the library
+// this should be generated or provided with the library
 typedef struct ResolverPtr ResolverPtr;
 typedef struct Bip353Result {
     int success;
