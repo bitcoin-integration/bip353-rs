@@ -1,1 +1,5 @@
 /target
+bip353.so
+/bip353.so
+test_ffi
+/test_ffi

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 Basic example of using the BIP-353 Python bindings.
 
