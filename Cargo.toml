@@ -1,6 +1,6 @@
 [package]
 name = "bip353-rs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Integration layer for BIP-353 DNS Payment Instructions"
 authors = ["Frankline Omondi <frankomosh197@gmail.com>"]
@@ -23,9 +23,9 @@ log = "0.4"
 url = "2.4"
 futures = "0.3"
 
-# CLI dependencies
-clap = { version = "4.0", features = ["derive"] }
-env_logger = "0.10"
+# Optional CLI dependencies
+clap = { version = "4.0", features = ["derive"], optional = true }
+env_logger = { version = "0.10", optional = true }
 
 [features]
 default = ["std"]
@@ -33,6 +33,7 @@ std = ["bitcoin-payment-instructions/std"]
 http = ["bitcoin-payment-instructions/http"]
 ffi = ["std", "once_cell"]
 python = ["std", "pyo3"]
+cli = ["std", "clap", "env_logger"]
 
 [dependencies.once_cell]
 version = "1.18"
@@ -55,6 +56,6 @@ crate-type = ["cdylib", "rlib", "staticlib"]
 
 # CLI binary
 [[bin]]
-name = "test-bip353"
+name = "bip353"
 path = "bin/test-bip353.rs"
-required-features = ["std"]
+required-features = ["cli"]
