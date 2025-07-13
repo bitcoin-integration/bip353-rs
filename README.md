@@ -69,6 +69,29 @@ bip353 resolve matt@mattcorallo.com
 #    💳 Type: lightning-offer
 #    🔄 Reusable: Yes
 ```
+## CLI Testing
+
+Use the following tests to validate CLI functionality in 'real world examples'.
+
+```bash
+# Test the main example in the lib
+cargo run --features cli --bin bip353 -- resolve someone@yousomeone.com
+
+# Test help system
+cargo run --features cli --bin bip353 -- --help
+
+# Test verbose output
+cargo run --features cli --bin bip353 -- -v resolve someone@yousomeone.com
+
+# Test the benchmark
+cargo run --features cli --bin bip353 -- benchmark someone@yousomeone.com
+
+# Test known working BIP-353 addresses
+cargo run --features cli --bin bip353 -- test-known
+
+# Test enhanced/extended features (e.g., safety checks, verbose metadata)
+cargo run --features cli --bin bip353 -- test-enhanced someone@yousomeone.com
+```
 
 ## API Overview
 
